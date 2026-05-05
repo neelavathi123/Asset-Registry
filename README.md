@@ -399,6 +399,233 @@ Synchronization ensures that only one thread accesses a shared resource at a tim
 Creating threads is expensive
 Reuse threads
 Better resource management
+===========================================================================================================
+Coding Problems- Employee
+==========================================================================================================
+
+
+Employee-Based Java 8 Coding Questions
+
+Employee class::
+--------------------
+class Employee {
+    private int id;
+    private String name;
+    private String department;
+    private double salary;
+    private int age;
+
+    public Employee(int id, String name, String department, double salary, int age) {
+        this.id = id;
+        this.name = name;
+        this.department = department;
+        this.salary = salary;
+        this.age = age;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public double getSalary() {
+        return salary;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public String toString() {
+        return id + " " + name + " " + department + " " + salary + " " + age;
+    }
+}
+---------------------
+Sample Employee List:
+List<Employee> employees = Arrays.asList(
+        new Employee(1, "Ravi", "IT", 60000, 28),
+        new Employee(2, "Anu", "HR", 45000, 26),
+        new Employee(3, "Kiran", "IT", 80000, 32),
+        new Employee(4, "Meena", "Finance", 70000, 30),
+        new Employee(5, "Arun", "HR", 50000, 29)
+);
+
+-----------------------------------
+ Find employees from IT department
+ 
+List<Employee> itEmployees = employees.stream()
+        .filter(e -> e.getDepartment().equals("IT"))
+        .collect(Collectors.toList());
+
+System.out.println(itEmployees);
+
+-----------------------------------
+Get only employee names
+List<String> names = employees.stream()
+        .map(Employee::getName)
+        .collect(Collectors.toList());
+
+System.out.println(names);
+
+O/P: [Ravi, Anu, Kiran, Meena, Arun]
+-----------------------------------
+ Sort employees by salary ascending
+ List<Employee> sortedEmployees = employees.stream()
+        .sorted(Comparator.comparingDouble(Employee::getSalary))
+        .collect(Collectors.toList());
+
+System.out.println(sortedEmployees);
+
+-----------------------------------
+ Sort employees by salary descending
+ List<Employee> sortedEmployeesDesc = employees.stream()
+        .sorted(Comparator.comparingDouble(Employee::getSalary).reversed())
+        .collect(Collectors.toList());
+
+System.out.println(sortedEmployeesDesc);
+
+-----------------------------------
+Find highest paid employee
+Employee highestPaid = employees.stream()
+        .max(Comparator.comparingDouble(Employee::getSalary))
+        .orElseThrow();
+
+System.out.println(highestPaid);
+
+-----------------------------------
+Find lowest paid employee
+
+Employee lowestPaid = employees.stream()
+        .min(Comparator.comparingDouble(Employee::getSalary))
+        .orElseThrow();
+
+System.out.println(lowestPaid);
+
+-----------------------------------
+Group employees by department
+Map<String, List<Employee>> employeesByDepartment = employees.stream()
+        .collect(Collectors.groupingBy(Employee::getDepartment));
+
+System.out.println(employeesByDepartment);
+
+Interview explanation:
+groupingBy() groups data based on a classifier function and returns a Map.
+-----------------------------------
+ Count employees in each department
+ Map<String, Long> countByDepartment = employees.stream()
+        .collect(Collectors.groupingBy(
+                Employee::getDepartment,
+                Collectors.counting()
+        ));
+
+System.out.println(countByDepartment);
+
+O/P:{Finance=1, HR=2, IT=2}
+-----------------------------------
+ Find average salary of each department
+ Map<String, Double> avgSalaryByDepartment = employees.stream()
+        .collect(Collectors.groupingBy(
+                Employee::getDepartment,
+                Collectors.averagingDouble(Employee::getSalary)
+        ));
+
+System.out.println(avgSalaryByDepartment);
+
+-----------------------------------
+Find total salary of all employees
+double totalSalary = employees.stream()
+        .mapToDouble(Employee::getSalary)
+        .sum();
+
+System.out.println(totalSalary);
+
+-----------------------------------
+ Find employees whose salary is greater than 60000
+ List<Employee> highSalaryEmployees = employees.stream()
+        .filter(e -> e.getSalary() > 60000)
+        .collect(Collectors.toList());
+
+System.out.println(highSalaryEmployees);
+
+-----------------------------------
+Convert employee list to map using id as key and name as value
+Map<Integer, String> employeeMap = employees.stream()
+        .collect(Collectors.toMap(
+                Employee::getId,
+                Employee::getName
+        ));
+
+System.out.println(employeeMap);
+
+-----------------------------------
+Find department with highest average salary
+Map<String, Double> avgSalaryByDepartment = employees.stream()
+        .collect(Collectors.groupingBy(
+                Employee::getDepartment,
+                Collectors.averagingDouble(Employee::getSalary)
+        ));
+
+Map.Entry<String, Double> highestAvgDept = avgSalaryByDepartment.entrySet()
+        .stream()
+        .max(Map.Entry.comparingByValue())
+        .orElseThrow();
+
+System.out.println(highestAvgDept);
+
+-----------------------------------
+For 4 years Java developer, practice these strongly:
+
+Duplicate elements
+Frequency count
+First non-repeated character
+Second highest number
+Employee grouping by department
+Average salary by department
+Convert list to map
+Duplicate key handling in toMap()
+map() vs flatMap()
+Optional usage
+
+These are the most commonly asked Java 8 coding patterns.
+-------------------
+Difference between map() and flatMap()
+map():
+List<String> names = Arrays.asList("java", "spring");
+List<String> result = names.stream()
+        .map(String::toUpperCase)
+        .collect(Collectors.toList());
+                .collect(Collectors.toList());
+Used for one input → one output.
+        
+flatMap():
+List<List<String>> data = Arrays.asList(
+        Arrays.asList("Java", "Spring"),
+        Arrays.asList("Hibernate", "JPA")
+);
+List<String> result = data.stream()
+        .flatMap(List::stream)
+        .collect(Collectors.toList());
+Used for one input → multiple outputs, then flattening.
+----------------------------------------------------------------
+optional usage:
+String name = null;
+
+String result = Optional.ofNullable(name)
+        .orElse("Default Name");
+
+System.out.println(result);
+--------------------------------------------------------
+
+
+
+
 
 
 
