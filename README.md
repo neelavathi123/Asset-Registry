@@ -25,3 +25,20 @@ Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To u
 ## Further help
 
 To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+
+
+import java.util.*;
+
+public class ListExample {
+    public static void main(String[] args) {
+        List<String> names = new ArrayList<>();
+
+        names.add("Java");
+        names.add("Python");
+        names.add("Java");   // duplicates allowed
+
+        System.out.println(names);
+        System.out.println(names.get(1));  // Access by index
+    }
+}
+
