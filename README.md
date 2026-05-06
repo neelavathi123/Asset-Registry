@@ -1325,6 +1325,123 @@ Java
 on other classes.
 
 Sources
+=================================================================
+**@Transactional in Spring — Detailed Explanation with Examples**
+@Transactional is used in Spring to manage database transactions automatically.
+A transaction means a group of database operations that should be executed as one single unit.
+If all operations are successful, the transaction is committed.
+If something fails, the transaction is rolled back.
+Usually, @Transactional is used on the service layer, not the controller or repository.
+
+Why service layer?
+Because business logic usually happens in service classes.
+
+1. What is a Transaction?
+A transaction follows the ACID properties:
+Property                Meaning
+Atomicity               All operations succeed or all fail
+Consistency             Database remains in a valid state
+Isolation               One transaction should not affect another incorrectly
+Durability              Once committed, data is permanently saved
+
+Spring automatically handles:
+transaction start
+commit
+rollback
+connection handling
+transaction boundaries
+
+**3. Basic Example of @Transactional**
+Entity Class
+@Entity
+public class Account {
+
+    @Id
+    private Long id;
+
+    private String holderName;
+
+    private Double balance;
+
+    // getters and setters
+}
+
+Repository
+
+public interface AccountRepository extends JpaRepository<Account, Long> {
+}
+
+
+Service class:
+@Service
+public class AccountService {
+
+    private final AccountRepository accountRepository;
+
+    public AccountService(AccountRepository accountRepository) {
+        this.accountRepository = accountRepository;
+    }
+
+    @Transactional
+    public void transferMoney(Long fromAccountId, Long toAccountId, Double amount) {
+
+        Account fromAccount = accountRepository.findById(fromAccountId)
+                .orElseThrow(() -> new RuntimeException("From account not found"));
+
+        Account toAccount = accountRepository.findById(toAccountId)
+                .orElseThrow(() -> new RuntimeException("To account not found"));
+
+        fromAccount.setBalance(fromAccount.getBalance() - amount);
+        accountRepository.save(fromAccount);
+
+        toAccount.setBalance(toAccount.getBalance() + amount);
+        accountRepository.save(toAccount);
+    }
+}
+
+What Happens Here?
+When transferMoney() is called:
+
+Spring starts a transaction.
+It fetches both accounts.
+It deducts money from the first account.
+It adds money to the second account.
+If everything succeeds, Spring commits the transaction.
+If an exception occurs, Spring rolls back the transaction.
+
+**11. Internal Working of @Transactional**
+Spring uses AOP proxy mechanism.
+When you call a transactional method from outside the bean:
+Spring actually calls a proxy object.
+The proxy:
+
+Starts transaction
+Calls actual method
+Commits if successful
+Rolls back if exception occurs
+Quick Summary
+
+Feature                  Explanation
+Annotation               @Transactional           
+Used for                 Managing database transactions
+Common layer             Service layer
+Default rollback         RuntimeException and Error
+Checked exception rollback   Use rollbackFor
+Default propagation         REQUIRED
+Read-only transaction      @Transactional(readOnly = true)
+Internal mechanism         Spring AOP proxy
+Best use case             Multiple database operations that must succeed or fail together
+
+Final Simple Definition
+@Transactional tells Spring:
+
+Start a transaction before this method runs. If the method finishes successfully, commit the changes. If the method throws an error, roll back the changes.
+
+Example:
+Java@Transactionalpublic void transferMoney() {    debitAccount();    creditAccount();}Show more lines
+Both debitAccount() and creditAccount() will be treated as one unit of work.
+
+
 
 
 
