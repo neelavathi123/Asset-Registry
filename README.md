@@ -1440,6 +1440,1875 @@ Start a transaction before this method runs. If the method finishes successfully
 Example:
 Java@Transactionalpublic void transferMoney() {    debitAccount();    creditAccount();}Show more lines
 Both debitAccount() and creditAccount() will be treated as one unit of work.
+===============================================================================================
+**A distributed transaction is:**
+
+A transaction that involves multiple independent resources such as multiple databases, services, or message queues, and needs to maintain consistency across all of them.
+==========================================================================
+**7. What is Saga Design Pattern?**
+The Saga design pattern is a way to manage distributed transactions without using one large ACID transaction.
+A saga breaks a large distributed transaction into a sequence of smaller local transactions.
+Each service performs its own local transaction and publishes an event or calls the next service.
+If one step fails, the saga executes compensating transactions to undo previous successful steps.
+Saga is:
+
+A sequence of local transactions where each step updates one service/database. If a step fails, compensating actions are executed to undo the completed steps.
+
+**A distributed transaction** is a transaction that spans multiple services or databases and tries to keep all of them consistent. Traditional distributed transactions use protocols like two-phase commit, but they are slow, blocking, and tightly coupled.
+**Saga is** a microservices design pattern used to manage distributed transactions by breaking them into a sequence of local transactions. Each service commits its own transaction. If any step fails, previously completed steps are undone using compensating transactions. Saga provides eventual consistency instead of strong consistency.
+-==========================================
+**Circuit breaker**
+
+failures exceed threshold
+        +--------------------------------+
+        |                                v
+   +----------+                    +----------+
+   |  Closed  |                    |   Open   |
+   +----------+                    +----------+
+        ^                                |
+        |                                |
+        | success in test calls          | wait duration completed
+        |                                v
+   +--------------------------------+----------+
+                                    |Half-Open |
+                                    +----------+
+                                        |
+                                        | failure in test calls
+                                        v
+                                    +----------+
+                                    |   Open   |
+                                    +----------+
+
+
+# Circuit Breaker Design Pattern — Detailed Explanation with Example
+
+The **Circuit Breaker design pattern** is used in distributed systems and microservices to prevent repeated calls to a failing service.
+
+It helps your application avoid wasting resources when a dependent service is down, slow, or unstable.
+
+***
+
+# 1. Why Do We Need Circuit Breaker?
+
+In microservices, one service often calls another service.
+
+Example:
+
+```text
+Order Service ---> Payment Service
+```
+
+If `Payment Service` is down, then `Order Service` may keep calling it again and again.
+
+This can cause problems:
+
+*   Threads get blocked
+*   Requests become slow
+*   Memory usage increases
+*   User experience becomes poor
+*   Failure spreads to other services
+*   Entire system may go down
+
+This is called **cascading failure**.
+
+***
+
+# 2. What is Cascading Failure?
+
+A cascading failure happens when failure in one service causes failures in other services.
+
+## Example
+
+Assume these services:
+
+```text
+Order Service ---> Payment Service ---> Bank Service
+```
+
+If `Bank Service` is down:
+
+```text
+Payment Service waits for Bank Service
+Order Service waits for Payment Service
+Customer waits for Order Service
+```
+
+Slowly:
+
+*   Payment Service threads get blocked
+*   Order Service threads get blocked
+*   More requests pile up
+*   System becomes overloaded
+*   Multiple services fail
+
+Circuit Breaker helps prevent this.
+
+***
+
+# 3. What is Circuit Breaker Pattern?
+
+Circuit Breaker works like an electrical circuit breaker.
+
+In electricity:
+
+> If too much current flows, the circuit breaker trips and stops the flow to prevent damage.
+
+In software:
+
+> If too many calls to a service fail, the circuit breaker opens and stops sending requests to that service temporarily.
+
+Instead of repeatedly calling a failing service, your application quickly returns a fallback response.
+
+***
+
+# 4. Simple Definition
+
+Circuit Breaker is a design pattern that:
+
+> Monitors calls to a remote service and stops calling it temporarily when failures exceed a configured limit.
+
+It allows the failing service time to recover.
+
+***
+
+# 5. Circuit Breaker States
+
+Circuit Breaker mainly has three states:
+
+1.  **Closed**
+2.  **Open**
+3.  **Half-Open**
+
+***
+
+## 5.1 Closed State
+
+This is the normal state.
+
+Requests are allowed to pass through.
+
+```text
+Order Service ---> Payment Service
+```
+
+If calls are successful, the circuit remains closed.
+
+But if failures increase beyond a threshold, the circuit moves to **Open** state.
+
+***
+
+## 5.2 Open State
+
+In open state, requests are blocked.
+
+The service call is not made.
+
+Instead, fallback response is returned immediately.
+
+```text
+Order Service -X-> Payment Service
+       |
+       v
+Fallback Response
+```
+
+Example fallback:
+
+```text
+"Payment service is temporarily unavailable. Please try again later."
+```
+
+This protects the system from repeated failures.
+
+***
+
+## 5.3 Half-Open State
+
+After some waiting time, the circuit breaker allows a few test requests.
+
+```text
+Order Service ---> Payment Service
+```
+
+If test requests succeed:
+
+```text
+Circuit changes from Half-Open to Closed
+```
+
+If test requests fail:
+
+```text
+Circuit changes from Half-Open to Open again
+```
+
+***
+
+# 6. Circuit Breaker State Flow
+
+```text
+              failures exceed threshold
+        +--------------------------------+
+        |                                v
+   +----------+                    +----------+
+   |  Closed  |                    |   Open   |
+   +----------+                    +----------+
+        ^                                |
+        |                                |
+        | success in test calls          | wait duration completed
+        |                                v
+   +--------------------------------+----------+
+                                    |Half-Open |
+                                    +----------+
+                                        |
+                                        | failure in test calls
+                                        v
+                                    +----------+
+                                    |   Open   |
+                                    +----------+
+```
+
+***
+
+# 7. Real-Time Example
+
+Imagine an e-commerce application.
+
+```text
+Order Service calls Payment Service
+```
+
+When customer places an order:
+
+```text
+1. Order Service creates order
+2. Order Service calls Payment Service
+3. Payment Service processes payment
+```
+
+If Payment Service is down, without circuit breaker:
+
+```text
+Order Service keeps calling Payment Service
+Every request waits and fails slowly
+System becomes overloaded
+```
+
+With circuit breaker:
+
+```text
+After some failures, circuit opens
+Order Service stops calling Payment Service
+Fallback response is returned immediately
+```
+
+***
+
+# 8. Example Without Circuit Breaker
+
+```java
+@Service
+public class OrderService {
+
+    private final PaymentClient paymentClient;
+
+    public OrderService(PaymentClient paymentClient) {
+        this.paymentClient = paymentClient;
+    }
+
+    public String placeOrder() {
+        String paymentResponse = paymentClient.makePayment();
+
+        return "Order placed with payment status: " + paymentResponse;
+    }
+}
+```
+
+Problem:
+
+If `PaymentClient` fails or takes too long, `placeOrder()` also fails or becomes slow.
+
+***
+
+# 9. Example With Circuit Breaker Using Resilience4j
+
+In Spring Boot, a common library for Circuit Breaker is **Resilience4j**.
+
+## Maven Dependency
+
+```xml
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-spring-boot3</artifactId>
+</dependency>
+```
+
+For Spring Boot Actuator integration, you may also use:
+
+```xml
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-micrometer</artifactId>
+</dependency>
+```
+
+***
+
+# 10. Service Example
+
+```java
+@Service
+public class OrderService {
+
+    private final PaymentClient paymentClient;
+
+    public OrderService(PaymentClient paymentClient) {
+        this.paymentClient = paymentClient;
+    }
+
+    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+    public String placeOrder() {
+        String paymentResponse = paymentClient.makePayment();
+
+        return "Order placed successfully. Payment response: " + paymentResponse;
+    }
+
+    public String paymentFallback(Exception ex) {
+        return "Order created, but payment service is temporarily unavailable. Please try payment later.";
+    }
+}
+```
+
+***
+
+## Explanation
+
+```java
+@CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+```
+
+This tells Resilience4j:
+
+*   Monitor this method
+*   Use circuit breaker configuration named `paymentService`
+*   If failures cross the limit, stop calling the actual method
+*   Call `paymentFallback()` instead
+
+***
+
+# 11. Payment Client Example
+
+```java
+@Component
+public class PaymentClient {
+
+    public String makePayment() {
+        // Simulating payment service call
+        throw new RuntimeException("Payment Service is down");
+    }
+}
+```
+
+Here, `makePayment()` always fails.
+
+After configured failure threshold is reached, circuit breaker opens.
+
+Then `placeOrder()` will directly call fallback instead of calling `makePayment()`.
+
+***
+
+# 12. Fallback Method Rules
+
+The fallback method should usually have:
+
+*   Same return type as original method
+*   Same parameters as original method
+*   Optional exception parameter at the end
+
+## Original Method
+
+```java
+public String placeOrder()
+```
+
+## Fallback Method
+
+```java
+public String paymentFallback(Exception ex)
+```
+
+If original method has parameters:
+
+```java
+@CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+public String placeOrder(Long orderId, Double amount) {
+    return paymentClient.makePayment(orderId, amount);
+}
+```
+
+Fallback should be:
+
+```java
+public String paymentFallback(Long orderId, Double amount, Exception ex) {
+    return "Payment failed for order: " + orderId;
+}
+```
+
+***
+
+# 13. Configuration in `application.yml`
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentService:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+```
+
+***
+
+## Explanation of Configuration
+
+### `slidingWindowSize`
+
+```yaml
+slidingWindowSize: 10
+```
+
+Circuit breaker checks the last 10 calls.
+
+Example:
+
+```text
+Last 10 calls: 6 failed, 4 successful
+Failure rate = 60%
+```
+
+***
+
+### `minimumNumberOfCalls`
+
+```yaml
+minimumNumberOfCalls: 5
+```
+
+Circuit breaker starts calculating failure rate only after at least 5 calls.
+
+This avoids opening circuit too early.
+
+***
+
+### `failureRateThreshold`
+
+```yaml
+failureRateThreshold: 50
+```
+
+If failure rate is 50% or more, circuit opens.
+
+Example:
+
+```text
+10 calls
+5 failed
+Failure rate = 50%
+Circuit opens
+```
+
+***
+
+### `waitDurationInOpenState`
+
+```yaml
+waitDurationInOpenState: 10s
+```
+
+Circuit remains open for 10 seconds.
+
+During this time, actual service calls are blocked.
+
+***
+
+### `permittedNumberOfCallsInHalfOpenState`
+
+```yaml
+permittedNumberOfCallsInHalfOpenState: 3
+```
+
+After 10 seconds, circuit enters half-open state and allows 3 test calls.
+
+If those calls succeed, circuit closes.
+
+If they fail, circuit opens again.
+
+***
+
+### `automaticTransitionFromOpenToHalfOpenEnabled`
+
+```yaml
+automaticTransitionFromOpenToHalfOpenEnabled: true
+```
+
+This allows circuit breaker to automatically move from open to half-open after wait time.
+
+***
+
+# 14. Example Flow with Configuration
+
+Assume:
+
+```yaml
+slidingWindowSize: 10
+minimumNumberOfCalls: 5
+failureRateThreshold: 50
+waitDurationInOpenState: 10s
+```
+
+## Step-by-step
+
+```text
+Call 1: Failed
+Call 2: Failed
+Call 3: Success
+Call 4: Failed
+Call 5: Failed
+```
+
+Now minimum calls completed.
+
+Failure rate:
+
+```text
+4 failures out of 5 calls = 80%
+```
+
+Since 80% is greater than threshold 50%, circuit opens.
+
+Now for next 10 seconds:
+
+```text
+Call 6: actual payment service not called, fallback returned
+Call 7: actual payment service not called, fallback returned
+Call 8: actual payment service not called, fallback returned
+```
+
+After 10 seconds:
+
+```text
+Circuit becomes Half-Open
+```
+
+It allows test calls:
+
+```text
+Test Call 1: Success
+Test Call 2: Success
+Test Call 3: Success
+```
+
+Circuit closes again.
+
+***
+
+# 15. Controller Example
+
+```java
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @PostMapping
+    public String placeOrder() {
+        return orderService.placeOrder();
+    }
+}
+```
+
+When you call:
+
+```http
+POST /orders
+```
+
+If Payment Service is healthy:
+
+```text
+Order placed successfully. Payment response: Payment completed
+```
+
+If Payment Service is down:
+
+```text
+Order created, but payment service is temporarily unavailable. Please try payment later.
+```
+
+***
+
+# 16. Circuit Breaker with REST API Call
+
+Suppose `PaymentClient` calls another microservice using `RestTemplate`.
+
+```java
+@Component
+public class PaymentClient {
+
+    private final RestTemplate restTemplate;
+
+    public PaymentClient(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
+    public String makePayment(Long orderId, Double amount) {
+        String url = "http://payment-service/payments";
+
+        PaymentRequest request = new PaymentRequest(orderId, amount);
+
+        return restTemplate.postForObject(url, request, String.class);
+    }
+}
+```
+
+Service:
+
+```java
+@Service
+public class OrderService {
+
+    private final PaymentClient paymentClient;
+
+    public OrderService(PaymentClient paymentClient) {
+        this.paymentClient = paymentClient;
+    }
+
+    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+    public String placeOrder(Long orderId, Double amount) {
+        String paymentResponse = paymentClient.makePayment(orderId, amount);
+
+        return "Order placed. Payment status: " + paymentResponse;
+    }
+
+    public String paymentFallback(Long orderId, Double amount, Exception ex) {
+        return "Order saved, but payment failed. Order ID: " + orderId;
+    }
+}
+```
+
+***
+
+# 17. Circuit Breaker vs Retry
+
+Circuit Breaker and Retry are related but different.
+
+| Feature   | Circuit Breaker                          | Retry                        |
+| --------- | ---------------------------------------- | ---------------------------- |
+| Purpose   | Stop calling failing service temporarily | Try failed operation again   |
+| Used when | Service is continuously failing          | Failure may be temporary     |
+| Behavior  | Fails fast                               | Re-attempts call             |
+| Risk      | May reject calls temporarily             | May overload failing service |
+| Example   | Payment service down                     | Network timeout once         |
+
+***
+
+## Retry Example
+
+```text
+Call Payment Service
+Failed
+Retry 1
+Failed
+Retry 2
+Success
+```
+
+Retry is good for temporary failures.
+
+But if service is fully down, retries can make the problem worse.
+
+So circuit breaker is often used with retry.
+
+***
+
+# 18. Circuit Breaker with Retry
+
+Example:
+
+```java
+@Retry(name = "paymentRetry", fallbackMethod = "paymentFallback")
+@CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+public String placeOrder(Long orderId, Double amount) {
+    return paymentClient.makePayment(orderId, amount);
+}
+```
+
+Conceptually:
+
+```text
+Try payment call
+If it fails, retry a limited number of times
+If failures continue, circuit breaker opens
+Return fallback
+```
+
+Important: Retry count should be limited. Too many retries can overload the downstream service.
+
+***
+
+# 19. Circuit Breaker vs Timeout
+
+A timeout controls how long your service waits for another service.
+
+Example:
+
+```text
+Payment Service does not respond within 2 seconds
+Request times out
+```
+
+Circuit breaker monitors repeated failures/timeouts.
+
+Usually, timeout and circuit breaker are used together.
+
+```text
+Timeout: prevents waiting too long for one request
+Circuit Breaker: prevents repeated calls to failing service
+```
+
+***
+
+# 20. Circuit Breaker vs Bulkhead
+
+Bulkhead limits how many calls can go to a dependency at a time.
+
+Example:
+
+```text
+Only 20 concurrent calls allowed to Payment Service
+```
+
+Circuit breaker stops calls when failures are high.
+
+Bulkhead prevents one dependency from consuming all resources.
+
+Both are useful in resilient microservices.
+
+***
+
+# 21. Common Circuit Breaker Use Cases
+
+Use circuit breaker when calling:
+
+*   another microservice
+*   external payment gateway
+*   third-party API
+*   email/SMS service
+*   inventory service
+*   shipping service
+*   cloud service
+*   slow database dependency
+*   remote file storage
+
+Example:
+
+```text
+Order Service -> Payment Gateway
+User Service -> Email Service
+Product Service -> Inventory Service
+Booking Service -> Airline API
+```
+
+***
+
+# 22. Benefits of Circuit Breaker
+
+| Benefit                       | Explanation                                          |
+| ----------------------------- | ---------------------------------------------------- |
+| Prevents cascading failures   | One failing service does not bring down all services |
+| Fails fast                    | Returns response quickly instead of waiting          |
+| Improves system stability     | Protects threads, memory, and connections            |
+| Gives service time to recover | Stops continuous traffic to failing service          |
+| Better user experience        | Can return meaningful fallback response              |
+| Supports resilience           | Helps build fault-tolerant microservices             |
+
+***
+
+# 23. Limitations of Circuit Breaker
+
+Circuit breaker is useful, but not a complete solution.
+
+| Limitation                       | Explanation                                     |
+| -------------------------------- | ----------------------------------------------- |
+| Does not fix the failing service | It only protects callers                        |
+| Requires good fallback logic     | Bad fallback can confuse users                  |
+| Needs proper tuning              | Wrong thresholds can open too early or too late |
+| Not useful for every method      | Best for remote calls, not simple local logic   |
+| Can hide real failures           | Monitoring is important                         |
+
+***
+
+# 24. Best Practices
+
+## 1. Use circuit breaker for remote calls
+
+Good:
+
+```text
+Order Service calls Payment Service
+```
+
+Not necessary:
+
+```text
+Simple calculation inside same service
+```
+
+***
+
+## 2. Always define meaningful fallback
+
+Bad fallback:
+
+```java
+return null;
+```
+
+Good fallback:
+
+```java
+return "Payment service is unavailable. Please try later.";
+```
+
+***
+
+## 3. Combine with timeout
+
+Without timeout, calls may hang for too long before failing.
+
+***
+
+## 4. Combine with retry carefully
+
+Use small retry counts.
+
+Example:
+
+```text
+maxAttempts = 3
+```
+
+Do not retry too aggressively.
+
+***
+
+## 5. Monitor circuit breaker state
+
+Monitor:
+
+```text
+CLOSED
+OPEN
+HALF_OPEN
+failure rate
+slow call rate
+fallback count
+```
+
+***
+
+## 6. Use different circuit breakers for different dependencies
+
+Example:
+
+```text
+paymentService circuit breaker
+inventoryService circuit breaker
+notificationService circuit breaker
+```
+
+Do not use one common circuit breaker for all services.
+
+***
+
+# 25. Complete Simple Example
+
+## Scenario
+
+```text
+Order Service calls Payment Service.
+If Payment Service fails repeatedly, circuit opens.
+Fallback response is returned.
+```
+
+***
+
+## `OrderService.java`
+
+```java
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+
+    private final PaymentClient paymentClient;
+
+    public OrderService(PaymentClient paymentClient) {
+        this.paymentClient = paymentClient;
+    }
+
+    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+    public String placeOrder(Long orderId) {
+        String paymentStatus = paymentClient.processPayment(orderId);
+
+        return "Order placed successfully. Payment status: " + paymentStatus;
+    }
+
+    public String paymentFallback(Long orderId, Exception ex) {
+        return "Order created with ID " + orderId +
+                ", but payment service is currently unavailable. Please retry payment later.";
+    }
+}
+```
+
+***
+
+## `PaymentClient.java`
+
+```java
+import org.springframework.stereotype.Component;
+
+@Component
+public class PaymentClient {
+
+    public String processPayment(Long orderId) {
+        // Simulating downstream service failure
+        throw new RuntimeException("Payment service not responding");
+    }
+}
+```
+
+***
+
+## `OrderController.java`
+
+```java
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @PostMapping("/{orderId}")
+    public String placeOrder(@PathVariable Long orderId) {
+        return orderService.placeOrder(orderId);
+    }
+}
+```
+
+***
+
+## `application.yml`
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+```
+
+***
+
+## Expected Behavior
+
+First few calls will try to call `PaymentClient`.
+
+Since it fails repeatedly, circuit opens.
+
+After that, calls directly go to fallback:
+
+```text
+Order created with ID 101, but payment service is currently unavailable. Please retry payment later.
+```
+
+The actual payment service is not called while circuit is open.
+
+***
+
+# 26. Interview Answer
+
+You can explain like this:
+
+> Circuit Breaker is a resilience design pattern used to prevent repeated calls to a failing service. It monitors failures when calling a remote service. If failures cross a configured threshold, the circuit moves from Closed to Open state and stops sending requests. During Open state, fallback response is returned immediately. After a wait duration, it moves to Half-Open state and allows a few test calls. If those calls succeed, the circuit closes again; otherwise, it opens again. This pattern prevents cascading failures and improves system stability in microservices.
+
+***
+
+# 27. Final Summary
+
+| Concept           | Meaning                                       |
+| ----------------- | --------------------------------------------- |
+| Circuit Breaker   | Stops calls to failing service temporarily    |
+| Closed            | Normal state, requests are allowed            |
+| Open              | Requests are blocked, fallback is returned    |
+| Half-Open         | Allows limited test calls                     |
+| Fallback          | Alternative response when service fails       |
+| Failure threshold | Percentage of failures needed to open circuit |
+| Wait duration     | Time circuit stays open before testing again  |
+| Main benefit      | Prevents cascading failures                   |
+
+In simple words:
+
+> Circuit Breaker protects your application from continuously calling a failing service. It fails fast, returns fallback, and gives the failing service time to recover.
+
+                                    =======================================================================
+No problem, Neelavathi — let’s make it very simple.
+
+Think of **Circuit Breaker** like this:
+
+> If Payment Service is failing again and again, Order Service should stop calling it for some time and return a safe message immediately.
+
+Like an electrical switch:
+
+```text
+Normal condition       -> switch ON  -> call Payment Service
+Too many failures      -> switch OFF -> do not call Payment Service
+After some time        -> test once  -> if working, switch ON again
+```
+
+Now let’s understand the **OrderService example line by line**.
+
+***
+
+# 1. Simple Scenario
+
+We have:
+
+```text
+OrderService  --->  PaymentClient
+```
+
+`OrderService` places the order.
+
+`PaymentClient` talks to Payment Service.
+
+If Payment Service fails, Circuit Breaker will call a fallback method.
+
+***
+
+# 2. Full OrderService Code
+
+```java
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+
+    private final PaymentClient paymentClient;
+
+    public OrderService(PaymentClient paymentClient) {
+        this.paymentClient = paymentClient;
+    }
+
+    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+    public String placeOrder(Long orderId) {
+        String paymentStatus = paymentClient.processPayment(orderId);
+
+        return "Order placed successfully. Payment status: " + paymentStatus;
+    }
+
+    public String paymentFallback(Long orderId, Exception ex) {
+        return "Order created with ID " + orderId +
+                ", but payment service is currently unavailable. Please retry payment later.";
+    }
+}
+```
+
+Now we will break it down **line by line**.
+
+***
+
+# 3. Line-by-Line Explanation
+
+## Line 1
+
+```java
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+```
+
+This line imports the `@CircuitBreaker` annotation.
+
+This annotation comes from **Resilience4j** library.
+
+We use it to tell Spring:
+
+> Please monitor this method. If this method fails many times, stop calling it temporarily and call fallback instead.
+
+***
+
+## Line 2
+
+```java
+import org.springframework.stereotype.Service;
+```
+
+This imports Spring’s `@Service` annotation.
+
+`@Service` tells Spring:
+
+> This class contains business logic. Please create an object of this class and manage it.
+
+***
+
+## Line 4
+
+```java
+@Service
+```
+
+This marks the class as a Spring service.
+
+So Spring will automatically create an object of `OrderService`.
+
+You do not need to write:
+
+```java
+OrderService orderService = new OrderService();
+```
+
+Spring does it for you.
+
+***
+
+## Line 5
+
+```java
+public class OrderService {
+```
+
+This is a normal Java class.
+
+It contains order-related business logic.
+
+***
+
+## Line 7
+
+```java
+private final PaymentClient paymentClient;
+```
+
+This creates a variable for `PaymentClient`.
+
+`PaymentClient` is the class responsible for calling Payment Service.
+
+Meaning:
+
+```text
+OrderService needs PaymentClient to make payment.
+```
+
+`final` means once this variable is assigned, it cannot be changed.
+
+***
+
+## Lines 9 to 11
+
+```java
+public OrderService(PaymentClient paymentClient) {
+    this.paymentClient = paymentClient;
+}
+```
+
+This is the constructor.
+
+Spring uses this constructor to inject `PaymentClient` into `OrderService`.
+
+This is called **constructor dependency injection**.
+
+In simple words:
+
+> Spring gives PaymentClient object to OrderService automatically.
+
+So when `OrderService` starts, it already has a `PaymentClient` ready to use.
+
+***
+
+# 4. Most Important Line: `@CircuitBreaker`
+
+```java
+@CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+```
+
+This is the main line.
+
+It means:
+
+> Apply Circuit Breaker logic to the below method.
+
+The below method is:
+
+```java
+public String placeOrder(Long orderId)
+```
+
+So Circuit Breaker will watch the `placeOrder()` method.
+
+***
+
+## Part 1: `name = "paymentService"`
+
+```java
+name = "paymentService"
+```
+
+This is the name of the circuit breaker.
+
+This name connects with your configuration in `application.yml`.
+
+Example:
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+```
+
+Here also the name is:
+
+```yaml
+paymentService
+```
+
+So this annotation:
+
+```java
+@CircuitBreaker(name = "paymentService")
+```
+
+uses this configuration:
+
+```yaml
+paymentService:
+```
+
+Simple meaning:
+
+> Use circuit breaker settings named paymentService.
+
+***
+
+## Part 2: `fallbackMethod = "paymentFallback"`
+
+```java
+fallbackMethod = "paymentFallback"
+```
+
+This means:
+
+> If `placeOrder()` fails, call `paymentFallback()` method.
+
+So if this line fails:
+
+```java
+String paymentStatus = paymentClient.processPayment(orderId);
+```
+
+then instead of showing technical error to user, Spring calls:
+
+```java
+paymentFallback(orderId, exception)
+```
+
+***
+
+# 5. Main Method Explanation
+
+```java
+public String placeOrder(Long orderId) {
+```
+
+This method places an order.
+
+It accepts one input:
+
+```java
+Long orderId
+```
+
+Example:
+
+```text
+orderId = 101
+```
+
+So this method is trying to place order number `101`.
+
+***
+
+## Inside `placeOrder()`
+
+```java
+String paymentStatus = paymentClient.processPayment(orderId);
+```
+
+This line calls Payment Service.
+
+In simple English:
+
+> Go to Payment Service and process payment for this order ID.
+
+If Payment Service works, it may return:
+
+```text
+Payment Successful
+```
+
+So now:
+
+```java
+paymentStatus = "Payment Successful";
+```
+
+***
+
+## Success Response
+
+```java
+return "Order placed successfully. Payment status: " + paymentStatus;
+```
+
+If payment is successful, this line returns success response.
+
+Example output:
+
+```text
+Order placed successfully. Payment status: Payment Successful
+```
+
+So the happy path is:
+
+```text
+User places order
+OrderService calls PaymentClient
+PaymentClient succeeds
+OrderService returns success message
+```
+
+***
+
+# 6. Fallback Method Explanation
+
+```java
+public String paymentFallback(Long orderId, Exception ex) {
+```
+
+This is the fallback method.
+
+Fallback means:
+
+> Backup method.
+
+If actual method fails, this method runs.
+
+***
+
+## Why Does It Have `Long orderId`?
+
+Original method has this parameter:
+
+```java
+public String placeOrder(Long orderId)
+```
+
+So fallback method must also have the same parameter:
+
+```java
+public String paymentFallback(Long orderId, Exception ex)
+```
+
+This allows fallback method to know which order failed.
+
+Example:
+
+```text
+orderId = 101
+```
+
+***
+
+## Why Does It Have `Exception ex`?
+
+```java
+Exception ex
+```
+
+This stores the reason for failure.
+
+Example failure:
+
+```text
+Payment service not responding
+```
+
+You may log it if needed:
+
+```java
+System.out.println(ex.getMessage());
+```
+
+But usually, we do not show technical error to user.
+
+***
+
+## Fallback Return Statement
+
+```java
+return "Order created with ID " + orderId +
+        ", but payment service is currently unavailable. Please retry payment later.";
+```
+
+This returns a safe message.
+
+Example output:
+
+```text
+Order created with ID 101, but payment service is currently unavailable. Please retry payment later.
+```
+
+Meaning:
+
+> We are not crashing the application. We are giving a proper message to the user.
+
+***
+
+# 7. Flow When Payment Service Is Working
+
+Suppose Payment Service is healthy.
+
+```java
+placeOrder(101)
+```
+
+Flow:
+
+```text
+1. User calls placeOrder(101)
+2. Circuit Breaker is CLOSED, so request is allowed
+3. paymentClient.processPayment(101) is called
+4. Payment Service returns "Payment Successful"
+5. placeOrder() returns success message
+```
+
+Output:
+
+```text
+Order placed successfully. Payment status: Payment Successful
+```
+
+***
+
+# 8. Flow When Payment Service Fails
+
+Suppose Payment Service is down.
+
+```java
+placeOrder(101)
+```
+
+Flow:
+
+```text
+1. User calls placeOrder(101)
+2. Circuit Breaker is CLOSED initially, so request is allowed
+3. paymentClient.processPayment(101) is called
+4. Payment Service throws error
+5. Circuit Breaker catches the failure
+6. Circuit Breaker calls paymentFallback()
+7. User gets fallback response
+```
+
+Output:
+
+```text
+Order created with ID 101, but payment service is currently unavailable. Please retry payment later.
+```
+
+***
+
+# 9. What Happens After Repeated Failures?
+
+Assume this configuration:
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+```
+
+Meaning:
+
+```text
+Check last 5 calls.
+Start checking only after minimum 3 calls.
+If 50% or more calls fail, open the circuit.
+Keep circuit open for 10 seconds.
+After 10 seconds, allow 2 test calls.
+```
+
+***
+
+## Example
+
+```text
+Call 1: Payment failed
+Call 2: Payment failed
+Call 3: Payment success
+```
+
+Total calls = 3  
+Failed calls = 2
+
+Failure percentage:
+
+```text
+2 out of 3 = 66%
+```
+
+Since `66%` is more than `50%`, Circuit Breaker opens.
+
+***
+
+# 10. What Does “Circuit Open” Mean?
+
+When circuit is open:
+
+```text
+OrderService will not call PaymentClient.
+```
+
+So this line will not execute:
+
+```java
+String paymentStatus = paymentClient.processPayment(orderId);
+```
+
+Instead, it directly calls:
+
+```java
+paymentFallback(orderId, exception)
+```
+
+This is called **fail fast**.
+
+Meaning:
+
+> Do not waste time calling a service that is already known to be failing.
+
+***
+
+# 11. PaymentClient Code
+
+Here is a simple `PaymentClient`:
+
+```java
+import org.springframework.stereotype.Component;
+
+@Component
+public class PaymentClient {
+
+    public String processPayment(Long orderId) {
+        throw new RuntimeException("Payment service not responding");
+    }
+}
+```
+
+Now line by line.
+
+***
+
+## Line 1
+
+```java
+import org.springframework.stereotype.Component;
+```
+
+This imports `@Component`.
+
+***
+
+## Line 3
+
+```java
+@Component
+```
+
+This tells Spring:
+
+> Create an object of PaymentClient also.
+
+So Spring can inject it into `OrderService`.
+
+***
+
+## Line 4
+
+```java
+public class PaymentClient {
+```
+
+Normal Java class.
+
+This class is responsible for payment-related external call.
+
+***
+
+## Line 6
+
+```java
+public String processPayment(Long orderId) {
+```
+
+This method processes payment for the given order ID.
+
+***
+
+## Line 7
+
+```java
+throw new RuntimeException("Payment service not responding");
+```
+
+This is only for testing.
+
+It intentionally throws an error.
+
+Meaning:
+
+```text
+Payment Service is down.
+```
+
+Because this method throws an exception, Circuit Breaker treats this as a failed call.
+
+***
+
+# 12. Controller Code
+
+```java
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @PostMapping("/{orderId}")
+    public String placeOrder(@PathVariable Long orderId) {
+        return orderService.placeOrder(orderId);
+    }
+}
+```
+
+This controller exposes an API.
+
+You can call:
+
+```http
+POST /orders/101
+```
+
+Then it calls:
+
+```java
+orderService.placeOrder(101L);
+```
+
+***
+
+# 13. Complete Request Flow
+
+When user calls:
+
+```http
+POST /orders/101
+```
+
+Flow:
+
+```text
+Controller receives request
+        |
+        v
+OrderController.placeOrder(101)
+        |
+        v
+OrderService.placeOrder(101)
+        |
+        v
+Circuit Breaker checks status
+        |
+        |-- If CLOSED:
+        |       call PaymentClient.processPayment(101)
+        |
+        |-- If OPEN:
+        |       skip PaymentClient
+        |       call paymentFallback()
+        |
+        v
+Return response to user
+```
+
+***
+
+# 14. Very Simple Analogy
+
+Imagine you are calling your friend.
+
+```text
+You call friend once  -> no answer
+You call again        -> no answer
+You call again        -> no answer
+```
+
+Now you decide:
+
+```text
+For the next 10 minutes, I will not call.
+I already know he is not picking up.
+```
+
+After 10 minutes:
+
+```text
+You call once to check.
+If he picks up, you continue calling normally.
+If not, you wait again.
+```
+
+That is exactly what Circuit Breaker does.
+
+***
+
+# 15. Important Rule About Fallback Method
+
+Original method:
+
+```java
+public String placeOrder(Long orderId)
+```
+
+Fallback method:
+
+```java
+public String paymentFallback(Long orderId, Exception ex)
+```
+
+The fallback method should have:
+
+1.  Same return type: `String`
+2.  Same input parameter: `Long orderId`
+3.  Extra exception parameter at the end: `Exception ex`
+
+So this is correct:
+
+```java
+public String paymentFallback(Long orderId, Exception ex)
+```
+
+This is wrong:
+
+```java
+public Integer paymentFallback(Long orderId, Exception ex)
+```
+
+Because original method returns `String`, but fallback returns `Integer`.
+
+***
+
+# 16. Final Simplified Version
+
+You can remember like this:
+
+```java
+@CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
+public String placeOrder(Long orderId) {
+    return paymentClient.processPayment(orderId);
+}
+```
+
+Meaning:
+
+```text
+Try paymentClient.processPayment(orderId).
+
+If it works:
+    return success.
+
+If it fails too many times:
+    stop calling paymentClient for some time.
+    directly call paymentFallback().
+```
+
+Fallback:
+
+```java
+public String paymentFallback(Long orderId, Exception ex) {
+    return "Payment service is down. Try later.";
+}
+```
+
+Meaning:
+
+```text
+Give a safe response instead of crashing.
+```
+
+***
+
+# 17. One-Line Interview Explanation
+
+You can say:
+
+> In this example, `@CircuitBreaker` watches the `placeOrder()` method. If the payment call fails repeatedly, it opens the circuit and stops calling Payment Service. Instead, it directly calls `paymentFallback()` and returns a safe response to the user. After some time, it tries a few calls again to check whether Payment Service is recovered.
 
 
 
